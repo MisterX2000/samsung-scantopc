@@ -22,24 +22,25 @@ from .state import state
 # angelnu: my scanner takes very long to find -> cache
 config = Config()
 
+
 # t-k: method to automatically determine translation from scanner command (received by server) to sane command
 #     was written for sizes but may be adapted to other translations
 def autoconfig_dic(config_name: str, xml_key: str, preferred: str) -> dict:
     try:
         # t-k: get available options from XML file that may be received by server
-        capxmlfile = request.urlopen(f'http://{config.REAL_SCANNER_IP}/IDS/CAP.XML')
+        capxmlfile = request.urlopen(f"http://{config.REAL_SCANNER_IP}/IDS/CAP.XML")
         capxmldata = capxmlfile.read()
         capxmlfile.close()
         xmlroot = ET.fromstring(capxmldata)
         sizes = []
         for size in xmlroot.iter(xml_key):
-            sizes.append(size.attrib['ID'])
+            sizes.append(size.attrib["ID"])
         # t-k: get available size options for SANE device
         sane_sizes = get_sane_instance()["page_format"].constraint
         # t-k: match these two sets together and save as dic_name (e.g. SIZE2SANE)
         dic = {}
         for sizeID in sizes:
-            size_lst = sizeID.split('_')[1:]  # t-k: may be > 1 part, e.g. ['B5', 'JIS']
+            size_lst = sizeID.split("_")[1:]  # t-k: may be > 1 part, e.g. ['B5', 'JIS']
             for saneSize in sane_sizes:
                 flag = True
                 for sizeElm in size_lst:
@@ -49,12 +50,12 @@ def autoconfig_dic(config_name: str, xml_key: str, preferred: str) -> dict:
                 if flag and (sizeID not in dic or preferred in saneSize.lower()):
                     dic[sizeID] = saneSize
         if dic == {}:
-            raise ValueError(f'{config_name} dictionary must not be empty!')
+            raise ValueError(f"{config_name} dictionary must not be empty!")
         print_autoconfig(dic, config_name, no_quotes=True)
         return dic
     except Exception as e:
-        print('Error while trying to configure scanning options:', file=sys.stderr)
-        print(f'    {type(e).__name__}: {e}', file=sys.stderr)
+        print("Error while trying to configure scanning options:", file=sys.stderr)
+        print(f"    {type(e).__name__}: {e}", file=sys.stderr)
         print(f"You should manually configure {config_name}.", file=sys.stderr)
         sys.exit(1)
 
@@ -70,28 +71,34 @@ def get_sane_instance() -> sane.SaneDev:
         while True:
             try:
                 # t-k: use modified open method to use modified sane classes
-                sane_instance = modsaneopen(config.SCANNER_SANE_NAME) \
-                    if config.MODIFIED_SANE \
+                sane_instance = (
+                    modsaneopen(config.SCANNER_SANE_NAME)
+                    if config.MODIFIED_SANE
                     else sane.open(config.SCANNER_SANE_NAME)
+                )
                 state.sane_singleton = sane_instance
 
                 # t-k: if SIZE2SANE / ... haven't been given in config file, try to automatically configure them
                 # t-k: f.l.t.r. -> name of dict, xml key, preferred sane option
-                autoconfig_dic('SIZE2SANE', 'Size', 'rotated')
+                autoconfig_dic("SIZE2SANE", "Size", "rotated")
                 print("Connected to scanner.")
                 return sane_instance
             except Exception as e:
-                if config.MODIFIED_SANE and e.message.startswith('no such scan device'):
-                    print("Proxy scan 'device' not found, restarting proxies and trying again ...", file=sys.stderr)
+                if config.MODIFIED_SANE and e.message.startswith("no such scan device"):
+                    print(
+                        "Proxy scan 'device' not found, restarting proxies and trying again ...",
+                        file=sys.stderr,
+                    )
                     # t-k: restart proxies
                     exit_proxies()
                     start_proxies()
                 else:
-                    print('Problem connecting to scanner, trying again in 10s ...', file=sys.stderr)
+                    print(
+                        "Problem connecting to scanner, trying again in 10s ...",
+                        file=sys.stderr,
+                    )
                     traceback.print_exc(file=sys.stderr)
                     time.sleep(10)
-
-        
 
 
 def scan_and_save(user_selection: ScanOption, imgs=None):
@@ -101,7 +108,8 @@ def scan_and_save(user_selection: ScanOption, imgs=None):
     #     so no more same file names with different extensions
     def exists_file_with_other_extension(base_filename):
         from glob import glob
-        search_pattern = base_filename + '.*'
+
+        search_pattern = base_filename + ".*"
         return bool(glob(search_pattern))
 
     # t-k: change ownership of scan file
@@ -115,22 +123,44 @@ def scan_and_save(user_selection: ScanOption, imgs=None):
 
     mode = config.MODES2SANE[user_selection["color"]]
     print("MODE: " + mode)
-    dpi = int(user_selection["resolution"].replace('DPI_', ''))
+    dpi = int(user_selection["resolution"].replace("DPI_", ""))
     print("DPI: " + str(dpi))
     size = config.SIZE2SANE[user_selection["size"]]
     print("SIZE: " + size)
-    doc_source = user_selection["doc_source"]
-    print("DOC_SOURCE: " + (doc_source or "AUTO"))
+    doc_source = user_selection.get("doc_source")
 
     # Initialize scan
 
     def init_scan():
         print("Scanning ...")
         s = get_sane_instance()
+        target_source = doc_source
+        if hasattr(s, "doc_source"):
+            if not target_source or str(target_source).lower() in ("auto", "none"):
+                try:
+                    s.doc_source = "ADF Simplex"
+                    s.start()
+                    s.cancel()
+                    target_source = "ADF Simplex"
+                    print("DOC_SOURCE: ADF Simplex (feeder loaded)")
+                except Exception:
+                    target_source = "Flatbed"
+                    print("DOC_SOURCE: Flatbed (feeder empty)")
+
+                # Re-open a fresh session handle so SANE driver is completely reset after probe
+                try:
+                    s.close()
+                except Exception:
+                    pass
+                s = sane.open(config.SCANNER_SANE_NAME)
+                state.sane_singleton = s
+            else:
+                print(f"DOC_SOURCE: {target_source}")
+            s.doc_source = target_source
+
         s.mode = mode
         s.resolution = dpi
         s.page_format = size  # t-k: bugfix page_format is correct (not page-format)
-        s.doc_source = doc_source
         imgs = s.multi_scan()
         return imgs, s
 
@@ -151,40 +181,48 @@ def scan_and_save(user_selection: ScanOption, imgs=None):
                         datetime=now.strftime("%Y-%m-%d_%H-%M-%S"),
                         uid=f"{index:02d}",  # t-k: index formatted with padding zero
                         homedir=config.HOME_DIR,  # t-k: automatically detect home dir ('~')
-                    )  
-                    filename = base_filename + '.' + EXTENSIONS[user_selection["format"]]  # t-k: seperate base_filename
+                    )
+                    filename = (
+                        base_filename + "." + EXTENSIONS[user_selection["format"]]
+                    )  # t-k: seperate base_filename
                     file_exists = exists_file_with_other_extension(
-                        base_filename)  # t-k: raise index independent of file extension
+                        base_filename
+                    )  # t-k: raise index independent of file extension
                     index += 1
                 # t-k: rotate image if necessary
-                if re.match('.*rotate', size, re.IGNORECASE):
+                if re.match(".*rotate", size, re.IGNORECASE):
                     im = im.rotate(270)
                 # t-k: print log of applying user filters only if there are any
-                if len(user_selection['filters']):
+                if len(user_selection["filters"]):
                     print("Applying user filters to " + filename + " ...")
-                    for userFilter in user_selection['filters']:
+                    for userFilter in user_selection["filters"]:
                         im = userFilter(im)  # t-k: replaced img with im
                 print("Saving " + filename + " ...")
-                im.info['dpi'] = (dpi, dpi)
-                im.info['resolution'] = (dpi, dpi)
+                im.info["dpi"] = (dpi, dpi)
+                im.info["resolution"] = (dpi, dpi)
                 im.save(filename, dpi=(dpi, dpi), resolution=dpi)
                 chown_file(filename)  # t-k: change ownership of scan file
                 print("Done.")
                 output_files.append(filename)
         except Exception as e:
-            if e == 'Error during device I/O':
+            if e == "Error during device I/O":
                 if config.MODIFIED_SANE:
-                    print('SANE ' + str(e) + '. Restarting proxies and retrying ...', file=sys.stderr)
+                    print(
+                        "SANE " + str(e) + ". Restarting proxies and retrying ...",
+                        file=sys.stderr,
+                    )
                     exit_proxies()
                     start_proxies()
                 else:
-                    print('SANE ' + str(e) + '. Retrying ...', file=sys.stderr)
+                    print("SANE " + str(e) + ". Retrying ...", file=sys.stderr)
                 # s.close() # <- this causes seg fault
                 state.sane_singleton = None
                 imgs, _s = init_scan()
             else:
-                print('Whoops! Problem scanning (maybe version Samsung device driver >= 4.1 and multi-scan?):',
-                      file=sys.stderr)
+                print(
+                    "Whoops! Problem scanning (maybe version Samsung device driver >= 4.1 and multi-scan?):",
+                    file=sys.stderr,
+                )
                 traceback.print_exc(file=sys.stderr)
                 break
         else:
@@ -199,11 +237,12 @@ def scan_and_save(user_selection: ScanOption, imgs=None):
         # s.close() # <- this causes seg fault
         state.sane_singleton = None
         # print('Scanner session closed and cache reset.')
-        print('Scanner cache reset.')
+        print("Scanner cache reset.")
 
     # Concat PDFs and delete temp ones
-    if (user_selection["format"] == "FORMAT_M_PDF" or user_selection["format"] == "FORMAT_PDF") and (
-            len(output_files) > 1):
+    if (
+        user_selection["format"] == "FORMAT_M_PDF" or user_selection["format"] == "FORMAT_PDF"
+    ) and (len(output_files) > 1):
         print("Concatenating PDF files ...")
         output = PdfWriter()
         for aFile in output_files:
@@ -236,10 +275,12 @@ def scann_worker():
     i = 0
     while query_printer_scan_status(state.server_instance_id) != 1:
         i += 1
-        if i % 300 == 0:  # t-k: refresh every > 5 mins (server get's auto. unregistered after ~30 mins)
+        if (
+            i % 300 == 0
+        ):  # t-k: refresh every > 5 mins (server get's auto. unregistered after ~30 mins)
             server_refresh()
         time.sleep(1)
-    print(' ' * 4 + 'Got it!')
+    print(" " * 4 + "Got it!")
 
     push_server_options()
 
@@ -256,7 +297,7 @@ def scann_worker():
             break
         elif pps == 1:
             push_server_options()
-            print('Reconnected, waiting for user selection ...')
+            print("Reconnected, waiting for user selection ...")
             # print ' '*4 + 'printer scan status: ' + str(query_printer_scan_status(SERVER_INSTANCE_ID)) + ' --
             # waiting for 2 ...'
             continue
@@ -264,10 +305,9 @@ def scann_worker():
         if i % 300 == 0:
             server_refresh()
         time.sleep(1)
-    print(' ' * 4 + 'Got it!')
+    print(" " * 4 + "Got it!")
 
     user_selection = query_user_options()
-    print('Options selected by user:', user_selection)
+    print("Options selected by user:", user_selection)
 
     scan_and_save(user_selection)
-

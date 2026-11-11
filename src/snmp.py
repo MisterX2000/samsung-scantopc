@@ -91,12 +91,19 @@ def query_printer_scan_status(instance_id):
     config = Config()
     # t-k: more descriptive Error handling and logging
     try:
-        result = query_snmp_variable(config.SCANNER_IP, (1, 3, 6, 1, 4, 1, 236, 11, 5, 11, 81, 11, 7, 2, 1, 2, instance_id))
+        result = query_snmp_variable(
+            config.SCANNER_IP,
+            (1, 3, 6, 1, 4, 1, 236, 11, 5, 11, 81, 11, 7, 2, 1, 2, instance_id),
+        )
         # (ObjectName('1.3.6.1.4.1.236.11.5.11.81.11.7.2.1.2.29'), OctetString('\x00\x00\x00\x00'))
         return result[0][1][0]
     except Exception as e:
-        if 'result' not in locals():
+        if "result" not in locals():
             result = None
-        raise Exception("Could not query printer scan status.\n" + ' ' * 4 +
-                         f"Result was '{result}'.\n" + ' ' * 4 +
-                         f"Error message: {e}.")
+        raise Exception(
+            "Could not query printer scan status.\n"
+            + " " * 4
+            + f"Result was '{result}'.\n"
+            + " " * 4
+            + f"Error message: {e}."
+        )

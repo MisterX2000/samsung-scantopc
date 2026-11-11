@@ -6,6 +6,9 @@ ENV DEBIAN_FRONTEND=noninteractive
 RUN printf '#!/bin/sh\nexit 101\n' > /usr/sbin/policy-rc.d \
     && chmod +x /usr/sbin/policy-rc.d
 
+# Install Astral uv from official image
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
+
 # Core runtime dependencies
 RUN echo "deb http://deb.debian.org/debian trixie-backports main" > /etc/apt/sources.list.d/trixie-backports.list && \
     apt-get update && \
@@ -46,7 +49,7 @@ COPY samsungScannerServer.py /usr/local/bin/samsungScannerServer.py
 RUN chmod +x /usr/local/bin/samsungScannerServer.py
 
 # Ensure Python can import modules from /usr/local/bin (where src/ lives)
-ENV PYTHONPATH="/usr/local/bin:${PYTHONPATH}"
+ENV PYTHONPATH="/usr/local/bin"
 
 # Output directory for scanned files
 RUN mkdir -p /scans

@@ -4,9 +4,9 @@ import xml.etree.ElementTree as ET
 
 from .config import Config, ScanOption
 from .state import state
-from .utils import fail
 
 # HTTP Post functions
+
 
 def post_multipart(host, selector, fields, files, exact_response=True):
     """
@@ -20,9 +20,9 @@ def post_multipart(host, selector, fields, files, exact_response=True):
         content_type, body = encode_multipart_formdata(fields, files)
         h = http_client.HTTPConnection(host)
         # h.set_debuglevel(1)
-        h.putrequest('POST', selector)
-        h.putheader('content-type', content_type)
-        h.putheader('content-length', str(len(body)))
+        h.putrequest("POST", selector)
+        h.putheader("content-type", content_type)
+        h.putheader("content-length", str(len(body)))
         h.endheaders()
         h.send(body)
         if exact_response:
@@ -31,7 +31,7 @@ def post_multipart(host, selector, fields, files, exact_response=True):
         else:
             return None
     except Exception as e:
-        raise Exception(f'Problem contacting Scanner over network: {e}')
+        raise Exception(f"Problem contacting Scanner over network: {e}")
 
 
 def encode_multipart_formdata(fields, files):
@@ -40,39 +40,50 @@ def encode_multipart_formdata(fields, files):
     files is a sequence of (name, filename, value) elements for data to be uploaded as files
     Return (content_type, body) ready for httplib.HTTP instance
     """
-    boundary = b'----------ThIs_Is_tHe_bouNdaRY_$'
-    crlf = b'\r\n'
+    boundary = b"----------ThIs_Is_tHe_bouNdaRY_$"
+    crlf = b"\r\n"
     stream = []
-    for (key, value) in fields:
-        stream.append(b'--' + boundary)
+    for key, value in fields:
+        stream.append(b"--" + boundary)
         stream.append(b'Content-Disposition: form-data; name="%d"' % key)
-        stream.append(b'')
-        if type(value) != bytes:
+        stream.append(b"")
+        if not isinstance(value, bytes):
             value = value.encode("utf-8")
         stream.append(value)
-    for (key, filename, value) in files:
-        stream.append(b'--' + boundary)
-        stream.append(b'Content-Disposition: form-data; name="%d"; filename="%b"' % (key, filename.encode("utf-8")))
-        stream.append(b'Content-Type: application/octet-stream')
-        stream.append(b'')
-        if type(value) != bytes:
+    for key, filename, value in files:
+        stream.append(b"--" + boundary)
+        stream.append(
+            b'Content-Disposition: form-data; name="%d"; filename="%b"'
+            % (key, filename.encode("utf-8"))
+        )
+        stream.append(b"Content-Type: application/octet-stream")
+        stream.append(b"")
+        if not isinstance(value, bytes):
             value = value.encode("utf-8")
         stream.append(value)
-    stream.append(b'--' + boundary + b'--')
-    stream.append(b'')
+    stream.append(b"--" + boundary + b"--")
+    stream.append(b"")
     body = crlf.join(stream)
-    content_type = b'multipart/form-data; boundary=%b' % boundary
+    content_type = b"multipart/form-data; boundary=%b" % boundary
     return content_type, body
 
 
 def server_register(printing=True):
     config = Config()
     msg = '<?xml version="1.0" encoding="UTF-8" ?>'
-    msg += '<root>'
-    msg += '<S2PC_Regi UserID="' + config.SERVER_NAME + '" UniqueID="' + state.server_uid + '" RegiType="ADD" />'
-    msg += '</root>'
+    msg += "<root>"
+    msg += (
+        '<S2PC_Regi UserID="'
+        + config.SERVER_NAME
+        + '" UniqueID="'
+        + state.server_uid
+        + '" RegiType="ADD" />'
+    )
+    msg += "</root>"
 
-    result = str(post_multipart(config.SCANNER_IP, '/IDS/ScanFaxToPC.cgi', [], [(1, "c:\\IDS.XML", msg)]))
+    result = str(
+        post_multipart(config.SCANNER_IP, "/IDS/ScanFaxToPC.cgi", [], [(1, "c:\\IDS.XML", msg)])
+    )
     # print result
     # <?xml version="1.0" encoding="UTF-8"?><root><S2PC_Regi UserID ="W510" Result="ADD_OK" InstanceID="29" /></root>
 
@@ -81,7 +92,9 @@ def server_register(printing=True):
         raise NameError("Error registering server: " + result)
     else:
         if printing:
-            print(f"Newly registered server '{config.SERVER_NAME}' with UniqueID '{state.server_uid}' has got")
+            print(
+                f"Newly registered server '{config.SERVER_NAME}' with UniqueID '{state.server_uid}' has got"
+            )
             print(f"    InstanceID '{m.group(1)}'.")  # t-k: better readability and understanding
         return int(m.group(1))
 
@@ -102,11 +115,19 @@ def server_unregister():
     config = Config()
     unique_id = state.server_uid
     msg = '<?xml version="1.0" encoding="UTF-8" ?>'
-    msg += '<root>'
-    msg += '<S2PC_Regi UserID="' + state.server_uid + '" UniqueID="' + unique_id + '" RegiType="DELETE" />'
-    msg += '</root>'
+    msg += "<root>"
+    msg += (
+        '<S2PC_Regi UserID="'
+        + state.server_uid
+        + '" UniqueID="'
+        + unique_id
+        + '" RegiType="DELETE" />'
+    )
+    msg += "</root>"
 
-    result = post_multipart(config.SCANNER_IP, '/IDS/ScanFaxToPC.cgi', [], [(1, "c:\\IDS.XML", msg)])
+    result = post_multipart(
+        config.SCANNER_IP, "/IDS/ScanFaxToPC.cgi", [], [(1, "c:\\IDS.XML", msg)]
+    )
     # print result
     # <?xml version="1.0" encoding="UTF-8"?>
     #   <root><S2PC_Regi UserID ="server" Result="DELETE_OK" InstanceID="140" /></root>
@@ -140,24 +161,24 @@ def push_server_options():
           </List>
         </S2PC_AppList>
      </root>"""
-    root = ET.Element('root')
-    app_list = ET.SubElement(root, 'S2PC_AppList')
+    root = ET.Element("root")
+    app_list = ET.SubElement(root, "S2PC_AppList")
 
     for index, option in enumerate(config.OPTIONS, start=1):
-        list_element = ET.SubElement(app_list, 'List')
-        ET.SubElement(list_element, 'AppIndex').attrib['Value'] = str(index)
-        ET.SubElement(list_element, 'AppName').attrib['Value'] = option["name"]
-        ET.SubElement(list_element, 'AppType').attrib['Value'] = 'MAC'
-        ET.SubElement(list_element, 'Resolution').attrib['Value'] = option["resolution"]
-        ET.SubElement(list_element, 'Color').attrib['Value'] = option["color"]
-        ET.SubElement(list_element, 'FileFormat').attrib['Value'] = option["format"]
-        ET.SubElement(list_element, 'ScanSize').attrib['Value'] = option["size"]
-        ET.SubElement(list_element, 'DuplexScan').attrib['Value'] = "DUPLEX_OFF"
-        ET.SubElement(list_element, 'Orientation').attrib['Value'] = "ORIENTATION_SIDEWAY"
+        list_element = ET.SubElement(app_list, "List")
+        ET.SubElement(list_element, "AppIndex").attrib["Value"] = str(index)
+        ET.SubElement(list_element, "AppName").attrib["Value"] = option["name"]
+        ET.SubElement(list_element, "AppType").attrib["Value"] = "MAC"
+        ET.SubElement(list_element, "Resolution").attrib["Value"] = option["resolution"]
+        ET.SubElement(list_element, "Color").attrib["Value"] = option["color"]
+        ET.SubElement(list_element, "FileFormat").attrib["Value"] = option["format"]
+        ET.SubElement(list_element, "ScanSize").attrib["Value"] = option["size"]
+        ET.SubElement(list_element, "DuplexScan").attrib["Value"] = "DUPLEX_OFF"
+        ET.SubElement(list_element, "Orientation").attrib["Value"] = "ORIENTATION_SIDEWAY"
 
     msg = b'<?xml version="1.0" encoding="UTF-8" ?>\r\n' + ET.tostring(root)
     # msg=ET.tostring(root, encoding="UTF-8")
-    post_multipart(config.SCANNER_IP, '/IDS/ScanFaxToPC.cgi', [], [(1, "scantopc", msg)], False)
+    post_multipart(config.SCANNER_IP, "/IDS/ScanFaxToPC.cgi", [], [(1, "scantopc", msg)], False)
 
 
 def query_user_options() -> ScanOption:
@@ -168,19 +189,13 @@ def query_user_options() -> ScanOption:
     #   <Resolution Value="DPI_300"/><Color Value="COLOR_GRAY"/><FileFormat Value="FORMAT_M_PDF"/>
     #   <ScanSize Value="SIZE_A4"/></S2PC_Select></root>'
     # print result
-    
-    raw_result = post_multipart(
-        config.SCANNER_IP, "/IDS/UserSelect.xml", [], [(1, "scantopc", "")]
-    )
+
+    raw_result = post_multipart(config.SCANNER_IP, "/IDS/UserSelect.xml", [], [(1, "scantopc", "")])
     if not raw_result:
         raise RuntimeError("No options selected by user (empty response)")
 
     # Decode if bytes
-    result_str = (
-        raw_result.decode("utf-8")
-        if isinstance(raw_result, bytes)
-        else raw_result
-    )
+    result_str = raw_result.decode("utf-8") if isinstance(raw_result, bytes) else raw_result
 
     xml_root = ET.fromstring(result_str)
     s2pc_select = xml_root.find("S2PC_Select")
@@ -195,7 +210,9 @@ def query_user_options() -> ScanOption:
             return elem.attrib["value"]
         elif default is not None:
             return default
-        raise RuntimeError(f"Tag or Value attribute for '{tag_name}' not found in XML: {result_str}")
+        raise RuntimeError(
+            f"Tag or Value attribute for '{tag_name}' not found in XML: {result_str}"
+        )
 
     index_str = get_val("AppIndex")
     index = int(index_str) - 1
@@ -205,9 +222,7 @@ def query_user_options() -> ScanOption:
 
     # Override with options returned by scanner if present
     user_options["color"] = get_val("Color", user_options.get("color"))
-    user_options["resolution"] = get_val(
-        "Resolution", user_options.get("resolution")
-    )
+    user_options["resolution"] = get_val("Resolution", user_options.get("resolution"))
     user_options["format"] = get_val("FileFormat", user_options.get("format"))
     user_options["size"] = get_val("ScanSize", user_options.get("size"))
 

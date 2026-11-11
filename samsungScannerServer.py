@@ -27,6 +27,7 @@ import sys
 import time
 
 from PIL import Image
+
 from src import __version__
 from src.config import Config
 from src.http_comms import server_register, server_unregister
@@ -88,7 +89,6 @@ if we want to unregister the server: sever -> scanner (HTTP Post) with:
 """
 
 
-
 # ---------------------------------------------------------------------------
 # Configuration — read entirely from environment variables.
 # An optional Python file (OPTIONS_FILE) may be mounted for advanced scan
@@ -99,7 +99,7 @@ HOME_DIR = os.getenv("HOME", os.path.expanduser("~"))
 
 # ############################## LOGGING ################################
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     config = Config()
 
     # Daemon mode
@@ -115,42 +115,51 @@ if __name__ == '__main__':
 
     # t-k: Logging supporting multiprocessing
     logQ = multiprocessing.Queue()
-    listener = multiprocessing.Process(target=listener_process,
-                                       args=(logQ, listener_configurer))
+    listener = multiprocessing.Process(target=listener_process, args=(logQ, listener_configurer))
     listener.start()
 
     worker_configurer(logQ)
 
-    sys.stdout = LogFile('stdout')
-    sys.stderr = LogFile('stderr')
-
+    sys.stdout = LogFile("stdout")
+    sys.stderr = LogFile("stderr")
 
     def exit_listener():
         logQ.put_nowait(None)
-
 
     # Print version and active configuration
     print("###########################")
     print("# Initiating version " + __version__)
     print("###########################")
 
-    print('At program termination joining log listener process with:\n' + ' ' * 4 +
-          str(atexit.register(exit_listener)))
+    print(
+        "At program termination joining log listener process with:\n"
+        + " " * 4
+        + str(atexit.register(exit_listener))
+    )
 
     # Log active configuration
     print("Configuration loaded from environment variables:")
     _env_config_vars = [
-        'ENABLED_SERVER',
-        'SCANNER_SANE_NAME', 'SERVER_NAME',
-        'OWNER_UID', 'OWNER',
-        'SCAN_OUTPUT_DIR', 'SCAN_FILENAME_TEMPLATE',
-        'MODIFIED_SANE', 'PROXY_DEBUGLEVEL', 'SCANNER_CACHING',
-        'LOG_NAME', 'LOG_MAXBYTES', 'LOG_BACKUPCOUNT',
-        'OPTIONS_FILE', 'SCAN_OPTIONS',
-        'SIZE2SANE', 'MODES2SANE',
+        "ENABLED_SERVER",
+        "SCANNER_SANE_NAME",
+        "SERVER_NAME",
+        "OWNER_UID",
+        "OWNER",
+        "SCAN_OUTPUT_DIR",
+        "SCAN_FILENAME_TEMPLATE",
+        "MODIFIED_SANE",
+        "PROXY_DEBUGLEVEL",
+        "SCANNER_CACHING",
+        "LOG_NAME",
+        "LOG_MAXBYTES",
+        "LOG_BACKUPCOUNT",
+        "OPTIONS_FILE",
+        "SCAN_OPTIONS",
+        "SIZE2SANE",
+        "MODES2SANE",
     ]
     for _var in _env_config_vars:
-        _val = os.environ.get(_var, '(not set — using default)')
+        _val = os.environ.get(_var, "(not set — using default)")
         print(f"CONFIG: {_var}={_val}")
 
     # Debug mode
@@ -166,10 +175,13 @@ if __name__ == '__main__':
     # Daemon mode
     if config.CLI_OPTIONS.daemon and config.CLI_OPTIONS.pidfile:
         print("Write PID to file: " + config.CLI_OPTIONS.pidfile)
-        print('At program termination removing PID file (if it still exists and not caught SIGQUIT) with:\n' +
-              ' ' * 4 + str(atexit.register(lambda: del_pid_file(config.CLI_OPTIONS.pidfile))))
+        print(
+            "At program termination removing PID file (if it still exists and not caught SIGQUIT) with:\n"
+            + " " * 4
+            + str(atexit.register(lambda: del_pid_file(config.CLI_OPTIONS.pidfile)))
+        )
         pid = str(os.getpid())
-        with open(config.CLI_OPTIONS.pidfile, 'w+') as f:
+        with open(config.CLI_OPTIONS.pidfile, "w+") as f:
             f.write(f"{pid}\n")
 
 # ######################### AUTO CONFIGURATION ##########################
@@ -177,52 +189,95 @@ if __name__ == '__main__':
 # t-k: some automatic configuration providing default values
 #     which takes place if values were not given in conf file
 
-print('The following was automatically configured.')
+print("The following was automatically configured.")
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     # Is enabled?
     if not config.ENABLED_SERVER:
         print("Server not enabled")
         sys.exit(0)
-
 
     # Calculate "ID" based on SERVER_NAME and hostname
     # t-k: use md5 hashing to get real unique IDs that take into account
     #     the whole strings rather than just the last 8 letters
     SERVER_UID = server_uid_gen(config.SERVER_NAME)
 
+    was_offline_at_start = False
     while True:
         try:
             SERVER_INSTANCE_ID = server_register()
+            if was_offline_at_start:
+                print(f"Connected to scanner at {config.SCANNER_IP}.")
+                was_offline_at_start = False
         except Exception:
-            logging.exception("Network or scanner not available: waiting 10s and trying again ...")
+            if not was_offline_at_start:
+                print(
+                    f"Printer at {config.SCANNER_IP} not reachable (turned off or sleeping). Retrying every 10s..."
+                )
+                was_offline_at_start = True
             time.sleep(10)  # Wait 10 seconds
         else:
             break
 
     # Unregister #t-k: with new function - easier to understand
-    print('At program termination unregistering server with:\n' + ' ' * 4 +
-          str(atexit.register(server_unregister)))
+    print(
+        "At program termination unregistering server with:\n"
+        + " " * 4
+        + str(atexit.register(server_unregister))
+    )
 
     # t-k: initiate queues for communication with subprocesses and
     #     start the proxy server processes
     if config.MODIFIED_SANE:
         start_proxies()
-        
-        print('At program termination joining proxy processes with:\n' + ' ' * 4 +
-              str(atexit.register(exit_proxies)))
+
+        print(
+            "At program termination joining proxy processes with:\n"
+            + " " * 4
+            + str(atexit.register(exit_proxies))
+        )
 
     # angelnu Test the Sane connection (also works as a chache to be ready at scan time)
     # t-k: can only do this after proxies are established if modified sane method is used
     #     + only applicable if one server is used
     if config.SCANNER_CACHING and not get_sane_instance():
-        print("Could not connect to Scanner (" + config.SCANNER_SANE_NAME + ") via SANE.", file=sys.stderr)
+        print(
+            "Could not connect to Scanner (" + config.SCANNER_SANE_NAME + ") via SANE.",
+            file=sys.stderr,
+        )
         sys.exit(1)
 
     # Main program: keep scanning
+    was_offline = False
     while True:
         try:
             scann_worker()
-        except Exception:
-            logging.exception("Something awful happened! Waiting 10 seconds before trying again.")
-            time.sleep(10)  # Wait 10 seconds
+            if was_offline:
+                print("Printer reconnected successfully. Scanner ready.")
+                was_offline = False
+        except Exception as e:
+            err_msg = str(e).lower()
+            is_offline = any(
+                term in err_msg
+                for term in [
+                    "requesttimedout",
+                    "timed out",
+                    "timeout",
+                    "could not query printer scan status",
+                    "problem contacting scanner",
+                    "network or scanner not available",
+                    "connection refused",
+                ]
+            )
+            if is_offline:
+                if not was_offline:
+                    print(
+                        f"Printer at {config.SCANNER_IP} is offline (turned off or sleeping). Waiting to reconnect..."
+                    )
+                    was_offline = True
+                time.sleep(10)
+            else:
+                logging.exception(
+                    "Unexpected error in scanner worker! Waiting 10 seconds before trying again."
+                )
+                time.sleep(10)

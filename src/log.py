@@ -14,7 +14,7 @@ class LogFile:
         self.buffer += msg
         lines = self.buffer.splitlines()
         # print>>sys.stderr,lines
-        if self.buffer.count('\n') == len(lines):
+        if self.buffer.count("\n") == len(lines):
             self.buffer = ""
         else:
             # Last line was not \n terminated
@@ -34,6 +34,7 @@ class FilterEmptyLines(logging.Filter):
 
 # t-k: classes that handle logging from multiple processes
 #     (supporting rotating log file)
+
 
 class QueueHandler(logging.Handler):
     """
@@ -107,11 +108,18 @@ def listener_configurer():
     if not config.CLI_OPTIONS.daemon:
         logging.basicConfig(level=logging.INFO)
     else:
-        logging.basicConfig(level=logging.INFO, filename='/dev/null')
+        logging.basicConfig(level=logging.INFO, filename="/dev/null")
     if config.LOG_NAME:
         root = logging.getLogger()
-        h = logging.handlers.RotatingFileHandler(filename=config.LOG_NAME, maxBytes=config.LOG_MAXBYTES, backupCount=config.LOG_BACKUPCOUNT)
-        f = logging.Formatter(fmt='%(asctime)s %(name)-12s %(levelname)-8s %(message)s', datefmt='%m-%d-%y %H:%M:%S')
+        h = logging.handlers.RotatingFileHandler(
+            filename=config.LOG_NAME,
+            maxBytes=config.LOG_MAXBYTES,
+            backupCount=config.LOG_BACKUPCOUNT,
+        )
+        f = logging.Formatter(
+            fmt="%(asctime)s %(name)-12s %(levelname)-8s %(message)s",
+            datefmt="%m-%d-%y %H:%M:%S",
+        )
         fil = FilterEmptyLines()
         h.setFormatter(f)
         h.addFilter(fil)
@@ -119,7 +127,7 @@ def listener_configurer():
 
 
 # This is the listener process top-level loop: wait for logging events
-# (LogRecords)on the queue and handle them, quit when you get a None for a 
+# (LogRecords)on the queue and handle them, quit when you get a None for a
 # LogRecord.
 def listener_process(queue, configurer):
     configurer()
@@ -136,7 +144,8 @@ def listener_process(queue, configurer):
         except:  # noqa: E722
             import sys
             import traceback
-            print('Whoops! Problem:', file=sys.stderr)
+
+            print("Whoops! Problem:", file=sys.stderr)
             traceback.print_exc(file=sys.stderr)
 
 
@@ -145,4 +154,3 @@ def worker_configurer(queue):
     root = logging.getLogger()
     root.addHandler(h)
     root.setLevel(logging.INFO)
-
